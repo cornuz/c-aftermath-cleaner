@@ -26,27 +26,33 @@ function aftermath_cleaner_page() {
 		global $wpdb;
 
 		// Récupérer le nombre total d'articles
-		$total_posts = $wpdb->get_var("SELECT COUNT(*) FROM wp_posts WHERE post_status = 'publish'");
-		echo '<style>TABLE.aftermath_posts TR:hover TD { background-color: red; color:white;}</style>';
+		$total_posts = $wpdb->get_var(
+		"SELECT COUNT(*) FROM wp_posts
+			WHERE (post_status = 'publish' OR post_status = 'draft')
+			AND post_type = 'post'
+		");
+		echo '<style>TABLE.aftermath_posts TR:hover TD { background-color: red; color:white; } BUTTON.delete-posts:hover { cursor:pointer; }</style>';
 		echo '<h2>Posts</h2>';
 		echo '<p>Total posts : <b>' . $total_posts . '</b></p>';
 
-		$posts = $wpdb->get_results("
-    SELECT
-        p.post_author as user_id,
-        u.user_login as user_name,
-        COUNT(p.ID) as total_posts,
-        MIN(p.post_date) as first_post,
-        MAX(p.post_date) as last_post
-    FROM
-        wp_posts p
-    LEFT JOIN
-        wp_users u ON p.post_author = u.ID
-    WHERE
-        p.post_status = 'publish'
-    GROUP BY
-        p.post_author
-    ");
+		$posts = $wpdb->get_results(
+		"SELECT
+			p.post_author as user_id,
+			u.user_login as user_name,
+			COUNT(p.ID) as total_posts,
+			MIN(p.post_date) as first_post,
+			MAX(p.post_date) as last_post
+		FROM
+			wp_posts p
+		LEFT JOIN
+			wp_users u ON p.post_author = u.ID
+		WHERE
+			(p.post_status = 'publish' OR p.post_status = 'draft')
+			AND p.post_type = 'post'
+		GROUP BY
+			p.post_author
+		");
+
 		echo '<table class="aftermath_posts" border="0" style="width: calc(100% - 15px); border: 0; margin: 0; padding: 15px; background: white; border-radius: 5px; box-shadow: 2px 4px 10px -7px black;">';
 		echo '<tr><th>Author Name</th><th>Role</th><th>Author ID</th><th>Total Posts</th><th>First Post</th><th>Last Post</th><th>Action</th></tr>';
 		foreach ($posts as $post) {
@@ -70,69 +76,71 @@ function aftermath_cleaner_page() {
 		echo '</table>';
 
 		// Récupérer le nombre total d'articles sans nom d'auteur
-		$total_posts_without_author_name = $wpdb->get_var("
-        SELECT COUNT(*)
-        FROM wp_posts p
-        LEFT JOIN wp_users u ON p.post_author = u.ID
-        WHERE p.post_status = 'publish' AND (u.user_login IS NULL OR u.user_login = '')
-    ");
+		$total_posts_without_author_name = $wpdb->get_var("SELECT COUNT(*) FROM wp_posts p
+			LEFT JOIN wp_users u ON p.post_author = u.ID
+			WHERE
+				(	p.post_status = 'publish' OR p.post_status = 'draft' )
+				AND (u.user_login IS NULL OR u.user_login = '')
+				AND p.post_type = 'post'
+		");
+
 
 		echo '<p>Anonymous posts : <b style="color:red;">' . $total_posts_without_author_name . '</b></p>';
 
 		echo "<script type='text/javascript'>
-		jQuery(document).ready(function($) {
-			$('.delete-posts').click(function() {
+			jQuery(document).ready(function($) {
+				$('.delete-posts').click(function() {
 					var userId = $(this).data('user-id');
 					var confirmation = confirm('Are you sure you want to delete all posts from Author ID ' + userId + '?');
 					if (confirmation) {
-            var button = $(this);
-            button.html('Deleting...'); // Change the button text
-            button.prop('disabled', true); // Disable the button
+						var button = $(this);
+						button.html('Deleting...'); // Change the button text
+						button.prop('disabled', true); // Disable the button
 						$('#total-posts-' + userId).css({
 							'background-color': 'red',
 							'color': 'white',
 							'font-weight': 'bold'
 						}); // Change the styles of the total posts cell
 
-            // Start updating the total posts every second
-            var intervalId = setInterval(function() {
-                $.ajax({
-                    url: ajaxurl,
-                    type: 'POST',
-                    data: {
-                        action: 'get_total_posts_by_user',
-                        user_id: userId
-                    },
-                    success: function(response) {
-                        $('#total-posts-' + userId).html(response); // Update the total posts cell
-                    }
-                });
-            }, 1000);
-
-            // Start the deletion process
-            $.ajax({
-                url: ajaxurl,
-                type: 'POST',
-                data: {
-                    action: 'delete_posts_by_user',
-                    user_id: userId
-                },
-                success: function(response) {
-									clearInterval(intervalId); // Stop updating the total posts
-									alert('All posts from Author ID ' + userId + ' have been deleted.');
-									location.reload(); // Refresh the page
-                },
-								error: function(jqXHR, textStatus, errorThrown) {
-									clearInterval(intervalId); // Stop updating the total posts
-									alert('An error has occurred: ' + textStatus + ' ' + errorThrown);
-									location.reload(); // Refresh the page
+						// Start updating the total posts every second
+						var intervalId = setInterval(function() {
+							$.ajax({
+								url: ajaxurl,
+								type: 'POST',
+								data: {
+									action: 'get_total_posts_by_user',
+									user_id: userId
+								},
+								success: function(response) {
+									$('#total-posts-' + userId).html(response); // Update the total posts cell
 								}
-            });
+							});
+						}, 1000);
 
-        }
+						// Start the deletion process
+						$.ajax({
+							url: ajaxurl,
+							type: 'POST',
+							data: {
+								action: 'delete_posts_by_user',
+								user_id: userId
+							},
+							success: function(response) {
+								clearInterval(intervalId); // Stop updating the total posts
+								alert('All posts from Author ID ' + userId + ' have been deleted.');
+								location.reload(); // Refresh the page
+							},
+							error: function(jqXHR, textStatus, errorThrown) {
+								clearInterval(intervalId); // Stop updating the total posts
+								alert('An error has occurred: ' + textStatus + ' ' + errorThrown);
+								location.reload(); // Refresh the page
+							}
+						});
+
+					}
+				});
 			});
-	});
-	</script>";
+		</script>";
 	} else {
 		echo '<p>Sorry, you do not have the necessary permissions to access this page.</p>';
 	}
