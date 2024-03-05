@@ -7,7 +7,8 @@ Version: 1.0
 */
 
 // Ajoutez une nouvelle page dans le panneau d'administration sous l'onglet "Settings"
-function aftermath_cleaner_menu() {
+function aftermath_cleaner_menu()
+{
 	add_options_page(
 		'© Aftermath Cleaner', // Titre de la page
 		'© Aftermath Cleaner', // Titre du menu
@@ -19,7 +20,8 @@ function aftermath_cleaner_menu() {
 add_action('admin_menu', 'aftermath_cleaner_menu');
 
 // Fonction pour afficher la page
-function aftermath_cleaner_page() {
+function aftermath_cleaner_page()
+{
 	// Vérifiez si l'utilisateur actuel est un administrateur
 	if (current_user_can('administrator')) {
 		echo '<h1>© Aftermath Cleaner</h1>';
@@ -27,16 +29,17 @@ function aftermath_cleaner_page() {
 
 		// Récupérer le nombre total d'articles
 		$total_posts = $wpdb->get_var(
-		"SELECT COUNT(*) FROM wp_posts
-			WHERE (post_status = 'publish' OR post_status = 'draft')
+			"SELECT COUNT(*) FROM wp_posts
+			WHERE (post_status = 'publish' OR post_status = 'draft' OR post_status = 'trash')
 			AND post_type = 'post'
-		");
+		"
+		);
 		echo '<style>TABLE.aftermath_posts TR:hover TD { background-color: red; color:white; } BUTTON.delete-posts:hover { cursor:pointer; }</style>';
 		echo '<h2>Posts</h2>';
-		echo '<p>Total posts : <b>' . $total_posts . '</b></p>';
+		echo '<p>Total Posts : <b>' . $total_posts . '</b></p>';
 
 		$posts = $wpdb->get_results(
-		"SELECT
+			"SELECT
 			p.post_author as user_id,
 			u.user_login as user_name,
 			COUNT(p.ID) as total_posts,
@@ -47,11 +50,12 @@ function aftermath_cleaner_page() {
 		LEFT JOIN
 			wp_users u ON p.post_author = u.ID
 		WHERE
-			(p.post_status = 'publish' OR p.post_status = 'draft')
+			(p.post_status = 'publish' OR p.post_status = 'draft' OR p.post_status = 'trash')
 			AND p.post_type = 'post'
 		GROUP BY
 			p.post_author
-		");
+		"
+		);
 
 		echo '<table class="aftermath_posts" border="0" style="width: calc(100% - 15px); border: 0; margin: 0; padding: 15px; background: white; border-radius: 5px; box-shadow: 2px 4px 10px -7px black;">';
 		echo '<tr><th>Author Name</th><th>Role</th><th>Author ID</th><th>Total Posts</th><th>First Post</th><th>Last Post</th><th>Action</th></tr>';
@@ -79,7 +83,7 @@ function aftermath_cleaner_page() {
 		$total_posts_without_author_name = $wpdb->get_var("SELECT COUNT(*) FROM wp_posts p
 			LEFT JOIN wp_users u ON p.post_author = u.ID
 			WHERE
-				(	p.post_status = 'publish' OR p.post_status = 'draft' )
+				(	p.post_status = 'publish' OR p.post_status = 'draft' OR p.post_status = 'trash')
 				AND (u.user_login IS NULL OR u.user_login = '')
 				AND p.post_type = 'post'
 		");
@@ -141,6 +145,44 @@ function aftermath_cleaner_page() {
 				});
 			});
 		</script>";
+
+		echo '<hr/>';
+		echo '<h4>Tags</h4>';
+
+		// Obtenez le nombre total de tags pour post_type=post
+		$all_tags = get_terms('post_tag', array(
+			'hide_empty' => false,
+		));
+		// Obtenez tous les tags utilisés
+		$used_tags = get_terms('post_tag', array(
+			'hide_empty' => true,
+		));
+		// Calculez le nombre de tags non utilisés
+		$unused_tags_count = count($all_tags) - count($used_tags);
+
+		echo '<p>Total Tags : <b>' . count($all_tags) . '</b> ( ' . count($used_tags) . ' used ).';
+		if ($unused_tags_count > 0) {
+			echo '<button id="delete-unused-tags">Delete <b>' . $unused_tags_count . '</b> unused tags</button>';
+		}
+		echo '</p>';
+		// Ajoutez du JavaScript pour gérer le clic sur le bouton
+		?>
+		<script type="text/javascript">
+			jQuery(document).ready(function($) {
+				$('#delete-unused-tags').click(function() {
+					var data = {
+						'action': 'delete_unused_tags'
+					};
+					$.post(ajaxurl, data, function(response) {
+						alert('Unused tags deleted : ' + response);
+						location.reload(); // Refresh the page
+					});
+				});
+			});
+		</script>
+		<?php
+
+		echo '<hr/>';
 	} else {
 		echo '<p>Sorry, you do not have the necessary permissions to access this page.</p>';
 	}
@@ -148,24 +190,43 @@ function aftermath_cleaner_page() {
 
 
 add_action('wp_ajax_delete_posts_by_user', 'delete_posts_by_user');
-function delete_posts_by_user() {
-	$userId = intval($_POST['user_id']);
-	$args = array(
-		'author' => $userId,
-		'post_type' => 'post',
-		'posts_per_page' => -1 // This will retrieve all posts by the user
-	);
-	$userPosts = get_posts($args);
-
-	foreach ($userPosts as $userPost) {
-		wp_delete_post($userPost->ID, true); // Set second parameter to true if you want to force delete
+function delete_posts_by_user()
+{
+	// Check if the current user is an administrator
+	if (!current_user_can('administrator')) {
+		wp_die('Vous n\'êtes pas autorisé à effectuer cette action.'); // This is required to terminate immediately and return a proper response
 	}
-	echo count($userPosts); // This will return the number of posts deleted
+	/*
+		$userId = intval($_POST['user_id']);
+		$args = array(
+			'author' => $userId,
+			'post_type' => 'post',
+			'post_status' => 'any', // This will retrieve all posts by the user, regardless of post status
+			'posts_per_page' => -1 // This will retrieve all posts by the user
+		);
+		$userPosts = get_posts($args);
+
+		foreach ($userPosts as $userPost) {
+			wp_delete_post($userPost->ID); // Move to trash
+			wp_delete_post($userPost->ID, true); // Set second parameter to true if you want to force delete
+		}
+		echo count($userPosts); // This will return the number of posts deleted
+		wp_die(); // This is required to terminate immediately and return a proper response
+	*/
+	global $wpdb;
+	$userId = intval($_POST['user_id']);
+	// Get all post IDs for the user, regardless of post status
+	$postIds = $wpdb->get_col($wpdb->prepare("SELECT ID FROM $wpdb->posts WHERE post_author = %d AND post_type = 'post'", $userId));
+	foreach ($postIds as $postId) {
+		wp_delete_post($postId, true); // Delete each post permanently
+	}
+	echo count($postIds); // This will return the number of posts deleted
 	wp_die(); // This is required to terminate immediately and return a proper response
 }
 
 add_action('wp_ajax_get_total_posts_by_user', 'get_total_posts_by_user');
-function get_total_posts_by_user() {
+function get_total_posts_by_user()
+{
 	$userId = intval($_POST['user_id']);
 	$args = array(
 		'author' => $userId,
@@ -175,4 +236,24 @@ function get_total_posts_by_user() {
 	$userPosts = get_posts($args);
 	echo count($userPosts); // This will return the number of posts
 	wp_die(); // This is required to terminate immediately and return a proper response
+}
+
+
+
+// Ajoutez une action AJAX pour effacer les tags inutilisés
+add_action('wp_ajax_delete_unused_tags', 'delete_unused_tags');
+function delete_unused_tags()
+{
+	$all_tags = get_terms('post_tag', array(
+		'hide_empty' => false,
+	));
+	$used_tags = get_terms('post_tag', array(
+		'hide_empty' => true,
+	));
+	$unused_tags = array_diff($all_tags, $used_tags);
+	foreach ($unused_tags as $tag) {
+		wp_delete_term($tag->term_id, 'post_tag');
+	}
+	echo count($unused_tags);
+	wp_die();
 }
