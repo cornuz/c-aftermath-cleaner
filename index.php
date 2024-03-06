@@ -344,26 +344,18 @@ function aftermath_cleaner_page()
 			$search_terms = explode(',', $search_term);
 			$search_terms = array_map('trim', $search_terms); // Supprimez les espaces avant et après chaque terme de recherche
 			$search_queries = array();
-/*
+
 			foreach ($search_terms as $term) {
 				$term = trim($term);
 				if (!empty($term)) { // Ignore les termes vides
 					$term = $wpdb->esc_like($term);
-					//$search_queries[] = "post_content LIKE '% " . $term . " %'";
-					$search_queries[] = "post_content LIKE '%" . $term . "%'";
+					//$search_queries[] = "LOWER(post_content) REGEXP '[^a-zA-Z]" . strtolower($term) . "[^a-zA-Z]'";
+					$search_queries[] = "LOWER(CONCAT(' ', post_content, ' ')) LIKE '%" . strtolower($term) . "%'";
+
 				}
 			}
 			$search_query = implode(' OR ', $search_queries);
-*/
-foreach ($search_terms as $term) {
-	$term = trim($term);
-	if (!empty($term)) { // Ignore les termes vides
-		$term = $wpdb->esc_like($term);
-		$search_queries[] = "LOWER(post_content) REGEXP '[^a-zA-Z]" . strtolower($term) . "[^a-zA-Z]'";
-	}
-}
-$search_query = implode(' OR ', $search_queries);
-var_dump($search_query);
+			//var_dump($search_query);
 			// Exécutez la requête SQL pour rechercher le terme dans tous les posts
 			$results = $wpdb->get_results("SELECT ID, post_title, post_content, post_type, post_author, post_date
 				FROM $wpdb->posts
@@ -387,19 +379,33 @@ var_dump($search_query);
 					$post_content = strtolower($result->post_content); // Convertissez le contenu du post en minuscules
 					foreach ($search_terms as $term) {
 						$term = strtolower(trim($term)); // Convertissez le terme de recherche en minuscules
-						if (preg_match('/[^a-zA-Z]' . preg_quote($term, '/') . '[^a-zA-Z]/', $post_content)) { // Vérifiez si le terme de recherche est présent dans le contenu du post
-								$found_terms[] = $term;
+						/*
+						if (!empty($term) && preg_match_all('/[^a-zA-Z]' . preg_quote($term, '/') . '[^a-zA-Z]/', $post_content, $matches)) { // Vérifiez si le terme de recherche est présent dans le contenu du post
+								$count = count($matches[0]);
+								$found_terms[] = $term . ($count > 1 ? '(' . $count . ')' : '');
+						}
+						*/
+						if (!empty($term)) {
+							// Créez une expression régulière pour rechercher le terme avec des limites de mots
+							$pattern = '/\b' . preg_quote($term, '/') . '\b/';
+							// Comptez le nombre d'occurrences du terme dans le contenu du post
+							$count = preg_match_all($pattern, $post_content);
+							if ($count > 0) {
+									$found_terms[] = $term . ($count > 1 ? '(' . $count . ')' : '');
+							}
 						}
 					}
 					//var_dump($found_terms);
-					echo '<tr>';
-					echo '<td>' . ucfirst($result->post_type) . '</td>';
-					echo '<td><a href="' . $post_link . '" target="_blank">' . $result->post_title . '</a></td>';
-					echo '<td>' . implode(', ', $found_terms) . '</td>'; // Affichez les termes trouvés
-					echo '<td>' . $author_name . '</td>';
-					echo '<td>' . date('Y/m/d @H:i', strtotime($result->post_date)) . '</td>';
-					echo '<td><button type="button" class="clean-content" data-content-id="' . $result->ID . '" data-content-title="' . $result->post_title . '"><span class="dashicons dashicons-superhero"></span> Clean</button></td>';
-					echo '</tr>';
+					if (!empty($found_terms)) {
+						echo '<tr>';
+						echo '<td>' . ucfirst($result->post_type) . '</td>';
+						echo '<td><a href="' . $post_link . '" target="_blank">' . $result->post_title . '</a></td>';
+						echo '<td>' . implode(', ', $found_terms) . '</td>'; // Affichez les termes trouvés
+						echo '<td>' . $author_name . '</td>';
+						echo '<td>' . date('Y/m/d @H:i', strtotime($result->post_date)) . '</td>';
+						echo '<td><button type="button" class="clean-content" data-content-id="' . $result->ID . '" data-content-title="' . $result->post_title . '"><span class="dashicons dashicons-superhero"></span> Clean</button></td>';
+						echo '</tr>';
+					}
 				}
 				echo '</table>';
 				//var_dump($results);
