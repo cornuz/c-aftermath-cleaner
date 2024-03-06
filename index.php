@@ -137,7 +137,8 @@ function aftermath_cleaner_page()
 		<style>
 			TABLE.aftermath_posts,
 			TABLE.aftermath_keywords {
-				width: calc(100% - 15px);
+				width: calc(100% - 30px);
+				max-width: 1200px;
 				border: 0;
 				margin: 0;
 				padding: 15px;
@@ -341,19 +342,30 @@ function aftermath_cleaner_page()
 
 			// Exécutez le code de recherche avec le terme de recherche
 			$search_terms = explode(',', $search_term);
+			$search_terms = array_map('trim', $search_terms); // Supprimez les espaces avant et après chaque terme de recherche
 			$search_queries = array();
-
+/*
 			foreach ($search_terms as $term) {
 				$term = trim($term);
 				if (!empty($term)) { // Ignore les termes vides
 					$term = $wpdb->esc_like($term);
-					$search_queries[] = "post_content LIKE '% " . $term . " %'";
+					//$search_queries[] = "post_content LIKE '% " . $term . " %'";
+					$search_queries[] = "post_content LIKE '%" . $term . "%'";
 				}
 			}
 			$search_query = implode(' OR ', $search_queries);
-
+*/
+foreach ($search_terms as $term) {
+	$term = trim($term);
+	if (!empty($term)) { // Ignore les termes vides
+		$term = $wpdb->esc_like($term);
+		$search_queries[] = "LOWER(post_content) REGEXP '[^a-zA-Z]" . strtolower($term) . "[^a-zA-Z]'";
+	}
+}
+$search_query = implode(' OR ', $search_queries);
+var_dump($search_query);
 			// Exécutez la requête SQL pour rechercher le terme dans tous les posts
-			$results = $wpdb->get_results("SELECT ID, post_title, post_type, post_author, post_date
+			$results = $wpdb->get_results("SELECT ID, post_title, post_content, post_type, post_author, post_date
 				FROM $wpdb->posts
 				WHERE (post_type = 'post' OR post_type = 'page') AND ($search_query)
 			");
@@ -365,14 +377,25 @@ function aftermath_cleaner_page()
 			if (!empty($results)) {
 				echo '<h4>' . number_format($num_results, 0, '.', '\'') . ' Search results for : <span style="color:red;">' . implode(', ', $search_terms) . '</span></h4>';
 				echo '<table class="aftermath_keywords" cellspacing=0 cellpadding=0>';
-				echo '<tr><th>Type</th><th>Title</th><th>Author Name</th><th>Date</th><th>Action</th></tr>';
+				echo '<tr><th>Type</th><th>Title</th><th>Found Terms</th><th>Author Name</th><th>Date</th><th>Action</th></tr>';
 				foreach ($results as $result) {
 					$author_info = get_userdata($result->post_author);
 					$author_name = !empty($author_info->user_nicename) ? '<b>'.$author_info->user_nicename.'</b>' : '<span class="dashicons dashicons-warning" style="color:red;"></span> <small>[empty]</small>';
 					$post_link = get_permalink($result->ID);
+					// Vérifiez quels termes de recherche sont présents dans le contenu du post
+					$found_terms = array();
+					$post_content = strtolower($result->post_content); // Convertissez le contenu du post en minuscules
+					foreach ($search_terms as $term) {
+						$term = strtolower(trim($term)); // Convertissez le terme de recherche en minuscules
+						if (preg_match('/[^a-zA-Z]' . preg_quote($term, '/') . '[^a-zA-Z]/', $post_content)) { // Vérifiez si le terme de recherche est présent dans le contenu du post
+								$found_terms[] = $term;
+						}
+					}
+					//var_dump($found_terms);
 					echo '<tr>';
 					echo '<td>' . ucfirst($result->post_type) . '</td>';
 					echo '<td><a href="' . $post_link . '" target="_blank">' . $result->post_title . '</a></td>';
+					echo '<td>' . implode(', ', $found_terms) . '</td>'; // Affichez les termes trouvés
 					echo '<td>' . $author_name . '</td>';
 					echo '<td>' . date('Y/m/d @H:i', strtotime($result->post_date)) . '</td>';
 					echo '<td><button type="button" class="clean-content" data-content-id="' . $result->ID . '" data-content-title="' . $result->post_title . '"><span class="dashicons dashicons-superhero"></span> Clean</button></td>';
