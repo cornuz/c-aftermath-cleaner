@@ -3,7 +3,7 @@
 Plugin Name: © Aftermath Cleaner
 Description: Search and clean malicious content
 Author: RAPHAEL CORNUZ
-Version: 0.7.4
+Version: 0.7.8
 */
 
 // Ajoutez une nouvelle page dans le panneau d'administration sous l'onglet "Settings"
@@ -55,7 +55,7 @@ function aftermath_cleaner_page()
 		}
 		echo '</p>';
 
-		?>
+?>
 		<script type='text/javascript'>
 			jQuery(document).ready(function($) {
 				$('.delete-posts').click(function() {
@@ -72,7 +72,7 @@ function aftermath_cleaner_page()
 						}); // Change the styles of the total posts cell
 
 						function formatNumberWithApostrophe(x) {
-    					return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+							return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, "'");
 						}
 
 						// Start updating the total posts every half second
@@ -133,7 +133,7 @@ function aftermath_cleaner_page()
 			GROUP BY
 				p.post_author
 		");
-?>
+		?>
 		<style>
 			TABLE.aftermath_posts,
 			TABLE.aftermath_keywords {
@@ -146,11 +146,13 @@ function aftermath_cleaner_page()
 				border-radius: 5px;
 				box-shadow: 2px 4px 10px -7px black;
 			}
+
 			TABLE.aftermath_posts TR TD,
 			TABLE.aftermath_keywords TR TD {
 				padding: 2px .5em;
 				border: 0;
 			}
+
 			TABLE.aftermath_posts TH,
 			TABLE.aftermath_keywords TH {
 				text-align: left;
@@ -158,6 +160,7 @@ function aftermath_cleaner_page()
 				border-bottom: 1px solid lightgrey;
 				padding-bottom: 5px;
 			}
+
 			TABLE.aftermath_posts TR:hover TD,
 			TABLE.aftermath_keywords TR:hover TD {
 				background-color: lightsalmon;
@@ -304,9 +307,9 @@ function aftermath_cleaner_page()
 
 			// Récupérer le nombre total de pages sans nom d'auteur
 			$total_pages_without_author_name = $wpdb->get_var("SELECT COUNT(*) FROM wp_posts p
-		LEFT JOIN wp_users u ON p.post_author = u.ID
-		WHERE
-			(	p.post_status = 'publish' OR p.post_status = 'draft' OR p.post_status = 'private')
+			LEFT JOIN wp_users u ON p.post_author = u.ID
+			WHERE
+				(	p.post_status = 'publish' OR p.post_status = 'draft' OR p.post_status = 'private')
 			AND (u.user_login IS NULL OR u.user_login = '')
 			AND p.post_type = 'page'
 		");
@@ -325,7 +328,7 @@ function aftermath_cleaner_page()
 			echo '<h2>Malicious content</h2>';
 
 			// Définissez les termes de recherche par défaut
-			$default_search_term = 'casino,viagra,bitcoin,cialis,porn,sex,';
+			$default_search_term = 'casino,viagra,cialis,levitra,bitcoin,porn,sex,';
 
 			// Récupérez le terme de recherche soumis, s'il existe
 			$search_term = isset($_POST['search_term']) ? $_POST['search_term'] : $default_search_term;
@@ -333,7 +336,7 @@ function aftermath_cleaner_page()
 			// Affichez le formulaire de recherche
 			?>
 			<form method="post">
-				<input type="text" name="search_term" value="<?php echo $search_term; ?>" style="width:360px;">
+				<input type="text" name="search_term" value="<?php echo $search_term; ?>" style="width:360px;" autocomplete="off">
 				<button type="submit">
 					<span class="dashicons dashicons-search"></span> Search
 				</button>
@@ -350,8 +353,9 @@ function aftermath_cleaner_page()
 				if (!empty($term)) { // Ignore les termes vides
 					$term = $wpdb->esc_like($term);
 					//$search_queries[] = "LOWER(post_content) REGEXP '[^a-zA-Z]" . strtolower($term) . "[^a-zA-Z]'";
-					$search_queries[] = "LOWER(CONCAT(' ', post_content, ' ')) LIKE '%" . strtolower($term) . "%'";
-
+					//$search_queries[] = "LOWER(CONCAT(' ', post_content, ' ')) LIKE '%" . strtolower($term) . "%'";
+					//$search_queries[] = "(LOWER(CONCAT(' ', post_content, ' ')) LIKE '%" . strtolower($term) . "%' OR LOWER(CONCAT(' ', post_title, ' ')) LIKE '%" . strtolower($term) . "%')";
+					$search_queries[] = "(LOWER(CONCAT(' ', post_content, ' ')) REGEXP ' " . strtolower($term) . " ' OR LOWER(CONCAT(' ', post_title, ' ')) REGEXP ' " . strtolower($term) . " ')";
 				}
 			}
 			$search_query = implode(' OR ', $search_queries);
@@ -372,29 +376,28 @@ function aftermath_cleaner_page()
 				echo '<tr><th>Type</th><th>Title</th><th>Found Terms</th><th>Author Name</th><th>Date</th><th>Action</th></tr>';
 				foreach ($results as $result) {
 					$author_info = get_userdata($result->post_author);
-					$author_name = !empty($author_info->user_nicename) ? '<b>'.$author_info->user_nicename.'</b>' : '<span class="dashicons dashicons-warning" style="color:red;"></span> <small>[empty]</small>';
+					$author_name = !empty($author_info->user_nicename) ? '<b>' . $author_info->user_nicename . '</b>' : '<span class="dashicons dashicons-warning" style="color:red;"></span> <small>[empty]</small>';
 					$post_link = get_permalink($result->ID);
 					// Vérifiez quels termes de recherche sont présents dans le contenu du post
-					$found_terms = array();
+					$found_terms_naked = array(); // Variable pour stocker les termes uniquement
+					$found_terms = array(); // Variable pour stocker les termes avec les quantités
 					$post_content = strtolower($result->post_content); // Convertissez le contenu du post en minuscules
 					foreach ($search_terms as $term) {
 						$term = strtolower(trim($term)); // Convertissez le terme de recherche en minuscules
-						/*
-						if (!empty($term) && preg_match_all('/[^a-zA-Z]' . preg_quote($term, '/') . '[^a-zA-Z]/', $post_content, $matches)) { // Vérifiez si le terme de recherche est présent dans le contenu du post
-								$count = count($matches[0]);
-								$found_terms[] = $term . ($count > 1 ? '(' . $count . ')' : '');
-						}
-						*/
 						if (!empty($term)) {
-							// Créez une expression régulière pour rechercher le terme avec des limites de mots
-							$pattern = '/\b' . preg_quote($term, '/') . '\b/';
-							// Comptez le nombre d'occurrences du terme dans le contenu du post
-							$count = preg_match_all($pattern, $post_content);
-							if ($count > 0) {
-									$found_terms[] = $term . ($count > 1 ? '(' . $count . ')' : '');
-							}
+								// Créez une expression régulière pour rechercher le terme avec des limites de mots
+								$pattern = '/\b' . preg_quote($term, '/') . '\b/';
+								// Comptez le nombre d'occurrences du terme dans le contenu du post
+								$count_content = preg_match_all($pattern, $post_content);
+								// Comptez le nombre d'occurrences du terme dans le titre du post
+								$count_title = preg_match_all($pattern, strtolower($result->post_title));
+								$count = $count_content + $count_title;
+								if ($count > 0) {
+										$found_terms_naked[] = $term;
+										$found_terms[] = $term . ($count > 1 ? '(' . $count . ')' : '');
+								}
 						}
-					}
+				}
 					//var_dump($found_terms);
 					if (!empty($found_terms)) {
 						echo '<tr>';
@@ -403,7 +406,16 @@ function aftermath_cleaner_page()
 						echo '<td>' . implode(', ', $found_terms) . '</td>'; // Affichez les termes trouvés
 						echo '<td>' . $author_name . '</td>';
 						echo '<td>' . date('Y/m/d @H:i', strtotime($result->post_date)) . '</td>';
-						echo '<td><button type="button" class="clean-content" data-content-id="' . $result->ID . '" data-content-title="' . $result->post_title . '"><span class="dashicons dashicons-superhero"></span> Clean</button></td>';
+						echo '<td>';
+						if ($count_title > 0) {
+								// Si le terme est trouvé dans le titre, affichez uniquement le bouton "Delete"
+								echo '<button type="button" class="delete-content" style="margin-left:5px;" data-content-id="' . $result->ID . '" data-content-title="' . $result->post_title . '"><span class="dashicons dashicons-trash"></span> Delete ' . ucfirst($result->post_type) . '</button>';
+						} else {
+								// Sinon, affichez les deux boutons
+								echo '<button type="button" class="clean-content" data-content-id="' . $result->ID . '" data-content-title="' . $result->post_title . '" data-found-terms="' .  htmlspecialchars(json_encode($found_terms_naked), ENT_QUOTES, 'UTF-8') . '"><span class="dashicons dashicons-superhero"></span> Clean</button>';
+								echo '<button type="button" class="delete-content" style="margin-left:5px;" data-content-id="' . $result->ID . '" data-content-title="' . $result->post_title . '"><span class="dashicons dashicons-trash"></span> Delete ' . ucfirst($result->post_type) . '</button>';
+						}
+						echo '</td>';
 						echo '</tr>';
 					}
 				}
@@ -416,7 +428,8 @@ function aftermath_cleaner_page()
 			?>
 			<script type='text/javascript'>
 				jQuery(document).ready(function($) {
-					$('.clean-content').click(function() {
+
+					$('.delete-content').click(function() {
 						var postId = $(this).data('content-id');
 						var postTitle = $(this).data('content-title');
 						if (confirm('Are you sure you want to delete the content with the title : "' + postTitle + '" ?')) {
@@ -424,7 +437,7 @@ function aftermath_cleaner_page()
 								url: ajaxurl, // Vous devez définir cette variable globale dans votre fichier PHP
 								type: 'POST',
 								data: {
-									action: 'clean_content',
+									action: 'delete_content',
 									post_id: postId
 								},
 								success: function(response) {
@@ -437,9 +450,34 @@ function aftermath_cleaner_page()
 							});
 						}
 					});
+
+					$('.clean-content').click(function() {
+						var postId = $(this).data('content-id');
+						var postTitle = $(this).data('content-title');
+						//var foundTerms = JSON.parse($(this).data('found-terms')); // Récupérez les termes trouvés à partir des données du bouton
+						var foundTerms = $(this).data('found-terms'); // Récupérez les termes trouvés à partir des données du bouton
+						// Envoyez une requête AJAX pour nettoyer le contenu
+						$.ajax({
+							url: ajaxurl, // Vous devez définir cette variable globale dans votre fichier PHP
+							type: 'POST',
+							data: {
+								action: 'clean_content',
+								post_id: postId,
+								found_terms: foundTerms // Passez les termes trouvés à votre fonction de nettoyage
+							},
+							success: function(response) {
+								alert('Content cleaned: ' + postTitle);
+								location.reload(); // Refresh the page
+							},
+							error: function() {
+								alert('An error occurred during cleaning.');
+							}
+						});
+					});
+
 				});
 			</script>
-		<?php
+	<?php
 
 
 	} else {
@@ -449,7 +487,8 @@ function aftermath_cleaner_page()
 
 //
 add_action('wp_ajax_delete_posts_by_user', 'delete_posts_by_user');
-function delete_posts_by_user() {
+function delete_posts_by_user()
+{
 	// Check if the current user is an administrator
 	if (!current_user_can('administrator')) {
 		wp_die('You are not authorized to perform this action.'); // This is required to terminate immediately and return a proper response
@@ -467,7 +506,8 @@ function delete_posts_by_user() {
 
 //
 add_action('wp_ajax_get_total_posts_by_user', 'get_total_posts_by_user');
-function get_total_posts_by_user() {
+function get_total_posts_by_user()
+{
 	$userId = intval($_POST['user_id']);
 	$args = array(
 		'author' => $userId,
@@ -481,7 +521,8 @@ function get_total_posts_by_user() {
 
 // Ajoutez une action AJAX pour effacer les tags inutilisés
 add_action('wp_ajax_delete_unused_tags', 'delete_unused_tags');
-function delete_unused_tags() {
+function delete_unused_tags()
+{
 	global $wpdb;
 	// Obtenez tous les tags inutilisés
 	$unused_tags = $wpdb->get_results("SELECT term_id
@@ -499,7 +540,8 @@ function delete_unused_tags() {
 
 // Ajoutez une action AJAX pour effacer les catégories inutilisées
 add_action('wp_ajax_delete_unused_categories', 'delete_unused_categories');
-function delete_unused_categories() {
+function delete_unused_categories()
+{
 	global $wpdb;
 	// Obtenez l'ID de la catégorie par défaut
 	$default_category_id = get_option('default_category');
@@ -519,8 +561,9 @@ function delete_unused_categories() {
 }
 
 //
-add_action('wp_ajax_clean_content', 'clean_content');
-function clean_content() {
+add_action('wp_ajax_delete_content', 'delete_content');
+function delete_content()
+{
 	global $wpdb;
 	$post_id = intval($_POST['post_id']);
 	$wpdb->update(
@@ -532,3 +575,41 @@ function clean_content() {
 	);
 	wp_die(); // Cette fonction est requise pour terminer correctement la requête AJAX
 }
+
+//
+add_action('wp_ajax_clean_content', 'clean_content');
+function clean_content()
+{
+	global $wpdb;
+	$post_id = intval($_POST['post_id']);
+	$found_terms = $_POST['found_terms'];
+
+	error_log('Post ID: ' . $post_id); // Log the post ID
+	error_log('Found Terms: ' . print_r($found_terms, true)); // Log the found terms
+
+	// Obtenez le contenu actuel
+	$content = get_post_field('post_content', $post_id);
+
+	// Supprimez chaque terme de recherche du contenu
+	foreach ($found_terms as $term) {
+		//$content = str_replace($term, '', $content);
+		$content = str_ireplace($term, '', $content);
+	}
+
+	error_log('Updated Content: ' . $content); // Log the updated content
+
+	// Mettez à jour le contenu
+	$result = $wpdb->update(
+		$wpdb->posts,
+		array('post_content' => $content), // Mettez à jour le contenu du post avec le nouveau contenu
+		array('ID' => $post_id), // Où le ID du post est égal à $post_id
+		array('%s'), // Le format du contenu du post
+		array('%d') // Le format de l'ID du post
+	);
+
+	error_log('Update Result: ' . $result); // Log the result of the update
+
+	wp_die(); // Cette fonction est requise pour terminer correctement la requête AJAX
+}
+
+
