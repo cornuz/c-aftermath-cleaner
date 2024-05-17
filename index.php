@@ -353,13 +353,9 @@ function aftermath_cleaner_page()
 				if (!empty($term)) { // Ignore les termes vides
 					$term = $wpdb->esc_like($term);
 					//$search_queries[] = "LOWER(post_content) REGEXP '[^a-zA-Z]" . strtolower($term) . "[^a-zA-Z]'";
-<<<<<<< HEAD
 					//$search_queries[] = "LOWER(CONCAT(' ', post_content, ' ')) LIKE '%" . strtolower($term) . "%'";
 					//$search_queries[] = "(LOWER(CONCAT(' ', post_content, ' ')) LIKE '%" . strtolower($term) . "%' OR LOWER(CONCAT(' ', post_title, ' ')) LIKE '%" . strtolower($term) . "%')";
 					$search_queries[] = "(LOWER(CONCAT(' ', post_content, ' ')) REGEXP ' " . strtolower($term) . " ' OR LOWER(CONCAT(' ', post_title, ' ')) REGEXP ' " . strtolower($term) . " ')";
-=======
-					$search_queries[] = "LOWER(CONCAT(' ', post_content, ' ')) LIKE '%" . strtolower($term) . "%'";
->>>>>>> 76cd701782fcd62cefaf121b90cdec7deebf288c
 				}
 			}
 			$search_query = implode(' OR ', $search_queries);
@@ -389,7 +385,6 @@ function aftermath_cleaner_page()
 					foreach ($search_terms as $term) {
 						$term = strtolower(trim($term)); // Convertissez le terme de recherche en minuscules
 						if (!empty($term)) {
-<<<<<<< HEAD
 								// Créez une expression régulière pour rechercher le terme avec des limites de mots
 								$pattern = '/\b' . preg_quote($term, '/') . '\b/';
 								// Comptez le nombre d'occurrences du terme dans le contenu du post
@@ -401,16 +396,6 @@ function aftermath_cleaner_page()
 										$found_terms_naked[] = $term;
 										$found_terms[] = $term . ($count > 1 ? '(' . $count . ')' : '');
 								}
-=======
-							// Créez une expression régulière pour rechercher le terme avec des limites de mots
-							$pattern = '/\b' . preg_quote($term, '/') . '\b/';
-							// Comptez le nombre d'occurrences du terme dans le contenu du post
-							$count = preg_match_all($pattern, $post_content);
-							if ($count > 0) {
-								$found_terms_naked[] = $term;
-								$found_terms[] = $term . ($count > 1 ? '(' . $count . ')' : '');
-							}
->>>>>>> 76cd701782fcd62cefaf121b90cdec7deebf288c
 						}
 				}
 					//var_dump($found_terms);
@@ -422,7 +407,6 @@ function aftermath_cleaner_page()
 						echo '<td>' . $author_name . '</td>';
 						echo '<td>' . date('Y/m/d @H:i', strtotime($result->post_date)) . '</td>';
 						echo '<td>';
-<<<<<<< HEAD
 						if ($count_title > 0) {
 								// Si le terme est trouvé dans le titre, affichez uniquement le bouton "Delete"
 								echo '<button type="button" class="delete-content" style="margin-left:5px;" data-content-id="' . $result->ID . '" data-content-title="' . $result->post_title . '"><span class="dashicons dashicons-trash"></span> Delete ' . ucfirst($result->post_type) . '</button>';
@@ -431,10 +415,6 @@ function aftermath_cleaner_page()
 								echo '<button type="button" class="clean-content" data-content-id="' . $result->ID . '" data-content-title="' . $result->post_title . '" data-found-terms="' .  htmlspecialchars(json_encode($found_terms_naked), ENT_QUOTES, 'UTF-8') . '"><span class="dashicons dashicons-superhero"></span> Clean</button>';
 								echo '<button type="button" class="delete-content" style="margin-left:5px;" data-content-id="' . $result->ID . '" data-content-title="' . $result->post_title . '"><span class="dashicons dashicons-trash"></span> Delete ' . ucfirst($result->post_type) . '</button>';
 						}
-=======
-						echo '<button type="button" class="clean-content" data-content-id="' . $result->ID . '" data-content-title="' . $result->post_title . '" data-found-terms="' .  htmlspecialchars(json_encode($found_terms_naked), ENT_QUOTES, 'UTF-8') . '"><span class="dashicons dashicons-superhero"></span> Clean</button>';
-						echo '<button type="button" class="delete-content" style="margin-left:5px;" data-content-id="' . $result->ID . '" data-content-title="' . $result->post_title . '"><span class="dashicons dashicons-trash"></span> Delete ' . ucfirst($result->post_type) . '</button>';
->>>>>>> 76cd701782fcd62cefaf121b90cdec7deebf288c
 						echo '</td>';
 						echo '</tr>';
 					}
